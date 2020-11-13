@@ -41,7 +41,7 @@ public class OSFileIO {
         File file = new File(path);
         FileOutputStream out = new FileOutputStream(file);
         while(true){
-            Thread.sleep(10);
+            //Thread.sleep(10);
             out.write(data);
 
         }
