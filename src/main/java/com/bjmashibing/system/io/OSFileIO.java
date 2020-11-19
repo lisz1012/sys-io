@@ -74,7 +74,9 @@ public class OSFileIO {
         raf.write("hello seanzhou\n".getBytes());
         System.out.println("write------------");
         System.in.read();
+        // 截止到这里，其实只是写到了pagecache，内容还没有到磁盘上， map.force();会刷到磁盘上
 
+        // 随机读写
         raf.seek(4);
         raf.write("ooxx".getBytes());
 
@@ -82,7 +84,9 @@ public class OSFileIO {
         System.in.read();
 
         FileChannel rafchannel = raf.getChannel();
-        //mmap  堆外  和文件映射的   byte  not  objtect
+        //mmap  堆外  和文件映射的ByteBuffer   byte  not  objtect
+        //只有硬盘中的文件可以有map（内存映射）方法，因为它是块设备，可以来回自由的寻址去读取。
+        //只有文件才可以做内存映射，把内核的pagecache和文件的数据页的地址空间映射起来。只有FileChannel.map可以得到一个MappedByteBuffer
         MappedByteBuffer map = rafchannel.map(FileChannel.MapMode.READ_WRITE, 0, 4096);
 
         map.put("@@@".getBytes());  //不是系统调用  但是数据会到达 内核的pagecache
@@ -137,12 +141,12 @@ public class OSFileIO {
         System.out.println("-------------put:123......");
         System.out.println("mark: " + buffer);
 
-        buffer.flip();   //读写交替
+        buffer.flip();   //读写交替 limit = pos; pos = 0;
 
         System.out.println("-------------flip......");
         System.out.println("mark: " + buffer);
 
-        buffer.get();
+        buffer.get(); // 读出一个字节的时候也会向后移动一个pos
 
         System.out.println("-------------get......");
         System.out.println("mark: " + buffer);
