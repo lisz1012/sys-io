@@ -151,13 +151,300 @@
    但是这个时候还没有accept，也就没有分配这个FD，只是连接有了。一旦accept就会从系统里面申请到一个文件描述符，就代表了这个socket。现在只是
    描述了服务端，客户端的内核里也有同样的socket、buffer和FD。
    
-4. 关掉各个进程并重启他们
-   
+4. 演示Backlog
+   关掉各个进程并重启他们。先重启服务端：
+   ```
+   javac SocketIOPropertites.java && java SocketIOPropertites
+   ```
+   然后在另一个标签页中查看：
+   ```
+   [root@localhost ~]# netstat -natp
+   Active Internet connections (servers and established)
+   Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+   ...
+   ...    
+   tcp6       0      0 :::9090                 :::*                    LISTEN      2376/java 
+   ```
+   可见只有一个Java进程处于Listen状态，然后再启动一个标签页，用TCP抓包：
+   ```
+   [root@localhost ~]# tcpdump -nn -i ens33 port 9090
+   tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+   listening on ens33, link-type EN10MB (Ethernet), capture size 65535 bytes
+   ```
+   再启动一个客户端：
+   ```
+   javac SocketClient.java && java SocketClient
+   ```
+   tcpdump这里可以看到三次握手：
+   ```
+   20:20:08.107220 IP 192.168.1.98.59156 > 192.168.1.99.9090: Flags [S], seq 2781446513, win 29200, options [mss 1460,sackOK,TS val 692138 ecr 0,nop,wscale 7], length 0
+   20:20:08.107255 IP 192.168.1.99.9090 > 192.168.1.98.59156: Flags [S.], seq 1687329244, ack 2781446514, win 1152, options [mss 1460,sackOK,TS val 698873 ecr 692138,nop,wscale 0], length 0
+   20:20:08.107556 IP 192.168.1.98.59156 > 192.168.1.99.9090: Flags [.], ack 1, win 229, options [nop,nop,TS val 692138 ecr 698873], length 0
+   ```
+   查看netstat，可见还没有分配文件描述符：
+   ```
+   [root@localhost ~]# netstat -natp
+   Active Internet connections (servers and established)
+   Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+   ...
+   ...       
+   tcp6       1      0 :::9090                 :::*                    LISTEN      2376/java           
+   tcp6       0      0 192.168.1.99:9090       192.168.1.98:59156      ESTABLISHED -  
+   ```
+   再启动一个客户端：
+   ```
+   javac SocketClient.java && java SocketClient
+   ```
+   他依然只是在内核里有，而并没有被应用程序接受并分配文件描述符：
+   ```
+   [root@localhost ~]# netstat -natp
+   Active Internet connections (servers and established)
+   Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+   ...
+   ...          
+   tcp6       0      0 192.168.1.99:9090       192.168.1.98:59156      ESTABLISHED -                   
+   tcp6       0      0 192.168.1.99:9090       192.168.1.98:59158      ESTABLISHED -
+   ```
+   两个客户端分别向服务器发送数据：
+   ```
+   [root@localhost testsocket]# javac SocketClient.java && java SocketClient
+   123
+   ```
+   ```
+   [root@localhost testsocket]# javac SocketClient.java && java SocketClient
+   456
+   ```
+   tcpdump程序也能看见数据包：
+   ```
+   20:28:03.335835 IP 192.168.1.98.59156 > 192.168.1.99.9090: Flags [P.], seq 1:2, ack 1, win 229, options [nop,nop,TS val 1167369 ecr 698873], length 1
+   20:28:03.335869 IP 192.168.1.99.9090 > 192.168.1.98.59156: Flags [.], ack 2, win 1151, options [nop,nop,TS val 1174102 ecr 1167369], length 0
+   20:28:03.335910 IP 192.168.1.98.59156 > 192.168.1.99.9090: Flags [P.], seq 2:3, ack 1, win 229, options [nop,nop,TS val 1167370 ecr 698873], length 1
+   20:28:03.336249 IP 192.168.1.98.59156 > 192.168.1.99.9090: Flags [P.], seq 3:4, ack 1, win 229, options [nop,nop,TS val 1167370 ecr 1174102], length 1
+   20:28:03.346524 IP 192.168.1.98.59156 > 192.168.1.99.9090: Flags [P.], seq 3:4, ack 1, win 229, options [nop,nop,TS val 1167380 ecr 1174102], length 1
+   20:28:03.346568 IP 192.168.1.99.9090 > 192.168.1.98.59156: Flags [.], ack 4, win 1149, options [nop,nop,TS val 1174112 ecr 1167370,nop,nop,sack 1 {3:4}], length 0
+   20:28:08.017759 IP 192.168.1.98.59158 > 192.168.1.99.9090: Flags [P.], seq 1:2, ack 1, win 229, options [nop,nop,TS val 1172051 ecr 1094358], length 1
+   20:28:08.017870 IP 192.168.1.99.9090 > 192.168.1.98.59158: Flags [.], ack 2, win 1151, options [nop,nop,TS val 1178784 ecr 1172051], length 0
+   20:28:08.018039 IP 192.168.1.98.59158 > 192.168.1.99.9090: Flags [P.], seq 2:3, ack 1, win 229, options [nop,nop,TS val 1172051 ecr 1094358], length 1
+   20:28:08.019269 IP 192.168.1.98.59158 > 192.168.1.99.9090: Flags [P.], seq 3:4, ack 1, win 229, options [nop,nop,TS val 1172052 ecr 1178784], length 1
+   20:28:08.029174 IP 192.168.1.98.59158 > 192.168.1.99.9090: Flags [P.], seq 3:4, ack 1, win 229, options [nop,nop,TS val 1172063 ecr 1178784], length 1
+   20:28:08.029272 IP 192.168.1.99.9090 > 192.168.1.98.59158: Flags [.], ack 4, win 1149, options [nop,nop,TS val 1178795 ecr 1172051,nop,nop,sack 1 {3:4}], length 0
+   ```
+   虽然此时没有进程去收养它们，但是缓冲区的数据已经收到了：
+   ```
+   [root@localhost ~]# netstat -natp
+   Active Internet connections (servers and established)
+   Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+   ...
+   ...        
+   tcp6       2      0 :::9090                 :::*                    LISTEN      2376/java           
+   tcp6       3      0 192.168.1.99:9090       192.168.1.98:59156      ESTABLISHED -                   
+   tcp6       3      0 192.168.1.99:9090       192.168.1.98:59158      ESTABLISHED - 
+   ```
+   现在这两个都可以，如果再开第三、四个客户端呢？第三个还是那样，没有变化，但是第四个开启之后，再查看netstat：
+   ```
+   [root@localhost ~]# netstat -natp
+   Active Internet connections (servers and established)
+   Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+   ...        
+   tcp        0      0 192.168.1.99:9090       192.168.1.98:59162      SYN_RECV    -                   
+   ...    
+   tcp6       3      0 :::9090                 :::*                    LISTEN      2376/java           
+   tcp6       3      0 192.168.1.99:9090       192.168.1.98:59156      ESTABLISHED -                   
+   tcp6       0      0 192.168.1.99:9090       192.168.1.98:59160      ESTABLISHED -                   
+   tcp6       3      0 192.168.1.99:9090       192.168.1.98:59158      ESTABLISHED -
+   ```
+   state就不对了。卡在了SYN_RECV上，代表我是来了，但是并没有回复确认（或者发丢了）。再开客户端也是这样了，因为BACKLOG设置了，后续队列里面，
+   只放两个。限流保证维服务负载均衡，达到上限之后向别的服务器漂移。BACKLOG要合理设置。
 
+三次握手讲解：确认的ack可以每发一个包就等对方的一个确认，这样的话就没有所谓的窗口的概念，是基本协议的规定。但是这样比较费劲。我们发的都是数据包
+或者报文，他有多大呢？可以通过ifconfig查看：
+```
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+```
+可见mtu是1500，1.5k抓包的时候有个options[], 中括号里面的mss 1460约等于数据的真实大小。也就是1500刨去20个字节的IP和20个字节的端口号，
+数据大小事1460个。数据如果比较大的话会切成好多个mtu往外发，手里会攒着很多想发的东西。可以每发一个就等一个确认，或者在三次握手的时候会协商一个
+window的大小。两边有窗口的概念，两边有多少个格子、可以放多少个包，根据协商的包的大小。两边的队列不一样。，通讯的时候都汇报自己这边放了几个还剩多少。
+然后对方就知道我方的窗口有多大、放多少个是没问题的，然后就把合适的包的个数发出去。最终根据确认了多少个，计算出还剩多少个格子，再继续发，
+减少了确认等待的时间，解决了拥塞。拥塞就是：接收端窗口被填满了，回复的ack会告诉发送端：没有余量了。对方就先阻塞自己不发送了。内核处理了几个包之后，
+再补发一个包，说又有余量了，发送端再接着发。这就是所谓的"拥塞控制"，既提升了性能，还留心别发爆了，因为本质上来说，全填满了的话，继续发就要开始丢弃了。
+演示：
+1. 跑服务端 2. 用nc连接，server却并不接受 3. 看server的netstat：
+```
+[root@localhost ~]# netstat -natp
+Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+...        
+tcp6       1      0 :::9090                 :::*                    LISTEN      3108/java           
+tcp6       0      0 192.168.1.99:9090       192.168.1.98:59170      ESTABLISHED - 
+```
+内核的连接已经有了，只不过程序还没有接受。现在在客户端发送好多数据：
+```
+[root@localhost testsocket]# nc 192.168.1.99 9090
+frghkdjfgd
+sfgsdfgsdflkgsdfgh
+dsflhgdfskgh
+s
+dfshsdflhjsdfksdfh
+sdfghsdfhsfdhfsdhs
+dsfhsfdhsdfjkdkfg
+dsfgsdfkjghsdfkjghfkg
+kjhkjhkjsdfghewiuewhrfwer
+werkfhwerfgjgj
+safkhasudfajkdfhsadkfh
+asdjfgadjsfgsajdf
+ashfgasjfgsajdfgajsf
+'jsadgfjsdfgsadhf
+asdfgjsjhfgsd
+sdjfsdfgsjfg
+1111111111
+```
+这时数据最多是顶到了内核的缓冲区里了。在netstat看的时候发现，接收队列一直在增长：  
+```
+[root@localhost ~]# netstat -natp
+Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+...
+...   
+tcp6       1      0 :::9090                 :::*                    LISTEN      3108/java           
+tcp6     271      0 192.168.1.99:9090       192.168.1.98:59170      ESTABLISHED -  
+```
+复制客户端数据，多发送几次，发现服务端队列涨到1152就不往上涨了：
+```
+[root@localhost ~]# netstat -natp
+Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+...       
+tcp6       1      0 :::9090                 :::*                    LISTEN      3108/java           
+tcp6    1152      0 192.168.1.99:9090       192.168.1.98:59170      ESTABLISHED -
+```
+现在server接收一下：
+```
+...
+safkhasudfajkdfhsadkfh
+asdjfgadjsfgsajdf
+ashfgasjfgsajdfgajsf
+'jsadgfjsdfgsadhf
+as
+```
+并没有最后的11111111，可见接受的是内核攒的头部的数据，剩下的就被丢弃了。所以如果控制不好一些参数会丢数据。
+再次跑起来server然后抓包，改客户端的代码:
+```
+client.setSendBufferSize(20);
+client.setTcpNoDelay(true);
+```
+改为：
+```
+client.setSendBufferSize(20);
+client.setTcpNoDelay(false);
+client.setOOBInline(false);
+```
+设置了发送的缓冲区大小是20。第二个配置是如果发的东西很小，宁可攒一攒在发，看看是不是严格按照20的大小发，还是能突破20这个限制，本地攒不攒那么多东西。
+为什么？因为发送的时候是一个字节一个字节发送的，命令行无论敲了多少个字节，在IO使用层面，它是一个字节一个字节的调内核，而且不调用flush()。关键
+是怎么用这两个参数控制传输频率的。可以一个包发100个字节，也可以按20分成5个包。客户端从短到长发送测试字符串
+```
+[root@localhost testsocket]# javac SocketClient.java && java SocketClient
+1
+123
+12345678901234567890123
+edfuewfgisadufhksdahfskahfsakjdfhksjafhkjsdafldksakghadfklsghdflsklfkjlsdkj
+```
+服务端接收到的情况：
+```
+[root@localhost testsocket]javac SocketIOPropertites.java && java SocketIOPropertites
+server up use 9090!
 
+client port: 59172
+client read some data is :1 val :1
+client read some data is :1 val :1
+client read some data is :2 val :23
+client read some data is :1 val :1
+client read some data is :22 val :2345678901234567890123
+client read some data is :1 val :e
+client read some data is :74 val :dfuewfgisadufhksdahfskahfsakjdfhksjafhkjsdafldksakghadfklsghdflsklfkjlsdkj
+```
+以上是优化的情况，现在不优化了,缓冲区满了就触发，或者能发就赶紧发：
+```
+client.setTcpNoDelay(true);
+```
+然后重启server和client，server并且接受。客户端发送的数据少的时候看不出来，发得多的时候并不攒成一个包一口气发过来，而是根据内核调度，每次
+该发的就赶紧发出去了。不走优化的场景就是平时传的东西不是很大、复用同一个连接、传很多互相独立的东西，就不开启优化了，把第二个属性射程true。
+比如：使用ssh执行ls，这个传输数据就很小。别小看这个等数据的延时，这会很影响吞吐量。  
+现在把第三个参数(不重要)设置为true：
+```
+[root@localhost testsocket]# javac SocketIOPropertites.java && java SocketIOPropertites
+server up use 9090!
 
+client port: 59176
+client read some data is :2 val :12
+client read some data is :1 val :3
+client read some data is :2 val :12
+client read some data is :2 val :34
+client read some data is :2 val :56
+client read some data is :2 val :sh
+client read some data is :2 val :df
+client read some data is :2 val :sd
+client read some data is :1 val :f
+client read some data is :2 val :sd
+client read some data is :1 val :f
+client read some data is :2 val :sd
+client read some data is :2 val :fs
+client read some data is :1 val :g
+client read some data is :2 val :dg
+client read some data is :2 val :dj
+client read some data is :2 val :fk
+client read some data is :1 val :s
+```
+再把后两个选项设置回false看看，
+```
+client.setTcpNoDelay(false);
+client.setOOBInline(false);
+```
+再次启动两端并且接受、发送数据，可以看到服务端接收到的数据：
+```
+[root@localhost testsocket]# javac SocketClient.java && java SocketClient
+fdshgjgjgdg
+fdgfkdj
+dfjgdfj
+dfjf
+```
+服务端
+```
+[root@localhost testsocket]# javac SocketIOPropertites.java && java SocketIOPropertites
+server up use 9090!
 
+client port: 59178
+client read some data is :1 val :f
+client read some data is :10 val :dshgjgjgdg
+client read some data is :1 val :f
+client read some data is :6 val :dgfkdj
+client read some data is :1 val :d
+client read some data is :6 val :fjgdfj
+client read some data is :1 val :d
+client read some data is :3 val :fjf
+```
+第一个包先急着发出去。  
 
+演示keepalive：服务端的代码改一下：
+```
+private static final boolean CLI_KEEPALIVE = true;
+```
+然后重启server和客户端，连接上，然后看到三次握手：
+```
+[root@localhost ~]# tcpdump -nn -i ens33 port 9090
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on ens33, link-type EN10MB (Ethernet), capture size 65535 bytes
+23:18:12.069305 IP 192.168.1.98.59180 > 192.168.1.99.9090: Flags [S], seq 3538636781, win 29200, options [mss 1460,sackOK,TS val 11376102 ecr 0,nop,wscale 7], length 0
+23:18:12.069453 IP 192.168.1.99.9090 > 192.168.1.98.59180: Flags [S.], seq 987354626, ack 3538636782, win 1152, options [mss 1460,sackOK,TS val 11382835 ecr 11376102,nop,wscale 0], length 0
+23:18:12.070105 IP 192.168.1.98.59180 > 192.168.1.99.9090: Flags [.], ack 1, win 229, options [nop,nop,TS val 11376104 ecr 11382835], length 0
+```
+然后就等在这里。keepalive是TCP协议里规定的：双方如果建立了连接，但是很久都不说话，能确定对方还活着吗？是不能的。在http里面也有一个keepalive，
+在负载均衡里面还有一个高可用进程叫keepalived，这三个东西不能弄混了，不同层级的。keepalive的时候在传输控制层要互相发一些"心跳"，来确认对方还活着。
+周期性做这件事，会控制资源和效率，连接挂掉的时候还保持连接会消耗资源。
+
+## 网络IO变化 模型
+什么是同步异步、阻塞非阻塞？没有异步阻塞模型。异步在Linux中没有实现。接下来用到的指令是 `strace -ff -o out cmd` Windows中不是程序自己读的，
+Linux中只是知道能读了，但还需要程序自己调用读，程序还得守在那里，同步的。只不过Linux中可以是阻塞的或者非阻塞的，可以一直等在那里直到来数据，
+也可以读不到的时候先继续忙别的，一会儿再来读一下试试。
 
 
 ```
