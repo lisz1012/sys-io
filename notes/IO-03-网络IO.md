@@ -94,7 +94,7 @@
    ```
    状态还是LISTEN，也就是说程序不是通过Socket来使用socket，程序其实是在等一个文件描述符，但是这个accept还没被调用，所以文件描述符还没有。
    这时候只要Server端跳过System.in.read()的阻塞，就可以执行accept(),然后就会分配一个文件描述符，把内核里的socket拿过来。Java的Socket
-   类的对象包装了一个socket文件描述符。现在在服务端运行的Java程序那里回车, 得到：
+   类的对象包装了一个socket文件描述符, 文件描述符是属于某个进程的。现在在服务端运行的Java程序那里回车, 得到：
    ```
    [root@localhost testsocket]# javac SocketIOPropertites.java && java SocketIOPropertites
    server up use 9090!
