@@ -16,6 +16,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SocketMultiplexingThreads {
 
     private ServerSocketChannel server = null;
+    // 多个Selector相当于Kafka的多个Partition
+    // 每个Selector可以自己处理读到的结果，亦可以再甩出一个线程池，如果有CPU密集的计算，还可以把读到的结果
+    // 放到一个队列，然后其他Service来消费进行计算。这样当前的Service就可以专注于IO，而下游的消费者专注于
+    // 计算，两个Service不但业务解耦、异步，还可以配置不同性能偏重的机器分别优化硬件性能（这也是微服务的优点）
     private  Selector selector1 = null;
     private  Selector selector2 = null;
     private  Selector selector3 = null;
@@ -76,24 +80,23 @@ class NioThread extends Thread {
         this.selector = sel;
         this.selectors =  n;
 
-        queue =new LinkedBlockingQueue[selectors];
+        queue = new LinkedBlockingQueue[selectors];
         for (int i = 0; i < n; i++) {
             queue[i] = new LinkedBlockingQueue<>();
         }
         System.out.println("Boss 启动");
     }
-   NioThread(Selector sel  ) {
-        this.selector = sel;
-       id = idx.getAndIncrement() % selectors  ;
-       System.out.println("worker: "+id +" 启动");
 
+    NioThread(Selector sel){
+        this.selector = sel;
+        id = idx.getAndIncrement() % selectors  ;
+        System.out.println("worker: "+id +" 启动");
     }
 
     @Override
     public void run() {
         try {
             while (true) {
-
                 while (selector.select(10) > 0) {
                     Set<SelectionKey> selectionKeys = selector.selectedKeys();
                     Iterator<SelectionKey> iter = selectionKeys.iterator();
