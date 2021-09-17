@@ -66,19 +66,22 @@ public class SocketMultiplexingThreads {
     }
 }
 
+/*
+Boss和worker同属NioThread类型，但是boss中维护了两条队列，给workers分配任务
+ */
 class NioThread extends Thread {
-     Selector selector = null;
-     static int selectors = 0;
+    Selector selector = null;
+    static int selectors = 0;
 
-     int id = 0;
+    int id = 0;
 
-     volatile static BlockingQueue<SocketChannel>[] queue;
+    volatile static BlockingQueue<SocketChannel>[] queue;
 
     static AtomicInteger idx = new AtomicInteger();
 
-    NioThread(Selector sel,int n ) {
+    NioThread(Selector sel, int n) {
         this.selector = sel;
-        this.selectors =  n;
+        this.selectors = n;
 
         queue = new LinkedBlockingQueue[selectors];
         for (int i = 0; i < n; i++) {
@@ -90,7 +93,7 @@ class NioThread extends Thread {
     NioThread(Selector sel){
         this.selector = sel;
         id = idx.getAndIncrement() % selectors  ;
-        System.out.println("worker: "+id +" 启动");
+        System.out.println("worker: " + id + " 启动");
     }
 
     @Override
@@ -98,8 +101,8 @@ class NioThread extends Thread {
         try {
             while (true) {
                 while (selector.select(10) > 0) {
-                    Set<SelectionKey> selectionKeys = selector.selectedKeys();
-                    Iterator<SelectionKey> iter = selectionKeys.iterator();
+                    Set<SelectionKey> selectedKeys = selector.selectedKeys();
+                    Iterator<SelectionKey> iter = selectedKeys.iterator();
                     while (iter.hasNext()) {
                         SelectionKey key = iter.next();
                         iter.remove();
