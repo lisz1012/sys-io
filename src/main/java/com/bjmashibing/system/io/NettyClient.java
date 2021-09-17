@@ -27,7 +27,7 @@ public class NettyClient {
             boot.group(worker)
                     .channel(NioSocketChannel.class)
                     .remoteAddress("localhost", 9090)
-                    .handler(new ChannelInitializer<SocketChannel>() { //过桥，Handlers的总handler
+                    .handler(new ChannelInitializer<SocketChannel>() { //过桥，Handlers的总handler. 预埋，在另外的线程中执行
                         @Override
                         protected void initChannel(SocketChannel sc) throws Exception {
                             System.out.println("初始化client");
