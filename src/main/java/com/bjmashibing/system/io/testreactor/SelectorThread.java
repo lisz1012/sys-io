@@ -127,7 +127,7 @@ public class SelectorThread  extends  ThreadLocal<LinkedBlockingQueue<Channel>> 
                 }else if(num < 0 ){
                     //客户端断开了
                     System.out.println("client: " + client.getRemoteAddress()+"closed......");
-                    key.cancel();
+                    key.cancel();  // epoll_ctl(,,EPOLL_CTL_DEL,,)  移除
                     break;
                 }
             } catch (IOException e) {

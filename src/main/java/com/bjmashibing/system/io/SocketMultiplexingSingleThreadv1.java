@@ -18,8 +18,8 @@ public class SocketMultiplexingSingleThreadv1 {
             server = ServerSocketChannel.open();
             server.configureBlocking(false);
             server.bind(new InetSocketAddress(port));
-            selector = Selector.open();                         // epoll_create
-            server.register(selector, SelectionKey.OP_ACCEPT);  // epoll_ctl
+            selector = Selector.open();                         // epoll_create, 开辟红黑树的那个空间
+            server.register(selector, SelectionKey.OP_ACCEPT);  // epoll_ctl, listen状态下的注册, 但触发的时机是在 epoll_wait 前面一个系统调用, 而 epoll_wait 是 selector.select(500)
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -37,7 +37,7 @@ public class SocketMultiplexingSingleThreadv1 {
                     Iterator<SelectionKey> iter = selectionKeys.iterator();
                     while (iter.hasNext()) {
                         SelectionKey key = iter.next();
-                        iter.remove();
+                        iter.remove();  // 防止在下一次 select() 调用时重复处理这个事件如果我们不调用 iter.remove();，那么即使这个 SelectionKey 对应的事件已经被处理过，它仍然会留在 selectedKeys 集合中。这意味着在下一次 select() 调用时，我们可能会错误地再次处理这个事件。
                         if (key.isAcceptable()) {
                             acceptHandler(key);
                         } else if (key.isReadable()) {
@@ -57,7 +57,7 @@ public class SocketMultiplexingSingleThreadv1 {
             SocketChannel client = ssc.accept();
             client.configureBlocking(false);
             ByteBuffer buffer = ByteBuffer.allocate(8192);
-            client.register(selector, SelectionKey.OP_READ, buffer);
+            client.register(selector, SelectionKey.OP_READ, buffer);   // epoll_ctl
             System.out.println("-------------------------------------------");
             System.out.println("新客户端：" + client.getRemoteAddress());
             System.out.println("-------------------------------------------");
@@ -83,8 +83,8 @@ public class SocketMultiplexingSingleThreadv1 {
                     buffer.clear();
                 } else if (read == 0) {
                     break;
-                } else {
-                    client.close();
+                } else {  // client.close()  会导致 TCP 连接的终止，并且释放与该连接相关的所有系统资源，包括文件描述符。
+                    client.close();   // read -1, 客户端断开了, 但是如果不close,则不会发送 FIN 包, 客户端的状态是 FIN_WAIT2, 后两次挥手没有完成. 有这一句客户端会进入TIME_WAIT状态, 其  tcp 连接一段时间之后从内核中删除. 关闭的发起方出现 TIME_WAIT
                     break;
                 }
             }
