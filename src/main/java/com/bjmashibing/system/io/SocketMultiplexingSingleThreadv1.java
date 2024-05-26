@@ -18,8 +18,8 @@ public class SocketMultiplexingSingleThreadv1 {
             server = ServerSocketChannel.open();
             server.configureBlocking(false);
             server.bind(new InetSocketAddress(port));
-            selector = Selector.open();  //  select  poll  *epoll
-            server.register(selector, SelectionKey.OP_ACCEPT);
+            selector = Selector.open();                         // epoll_create
+            server.register(selector, SelectionKey.OP_ACCEPT);  // epoll_ctl
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -32,7 +32,7 @@ public class SocketMultiplexingSingleThreadv1 {
             while (true) {
                 Set<SelectionKey> keys = selector.keys();
                 System.out.println(keys.size()+"   size");
-                while (selector.select(500) > 0) {
+                while (selector.select(500) > 0) {          // epoll_wait
                     Set<SelectionKey> selectionKeys = selector.selectedKeys();
                     Iterator<SelectionKey> iter = selectionKeys.iterator();
                     while (iter.hasNext()) {
