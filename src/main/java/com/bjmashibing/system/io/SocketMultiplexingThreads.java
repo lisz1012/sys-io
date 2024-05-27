@@ -106,7 +106,7 @@ class NioThread extends Thread {
                     while (iter.hasNext()) {
                         SelectionKey key = iter.next();
                         iter.remove();
-                        if (key.isAcceptable()) {
+                        if (key.isAcceptable()) { // 只有 selector1 注册了 Accept 事件, 其他的 selector 都只走下面的分支
                             acceptHandler(key);
                         } else if (key.isReadable()) {
                             readHandler(key);
