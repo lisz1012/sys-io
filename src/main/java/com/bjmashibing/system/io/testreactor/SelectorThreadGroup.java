@@ -61,7 +61,7 @@ public class SelectorThreadGroup {  //天生都是boss
                 SelectorThread st = next();  //listen 选择了 boss组中的一个线程后，要更新这个线程的work组
                 st.lbq.put(c);
                 st.setWorker(stg);
-                st.selector.wakeup();
+                st.selector.wakeup();  // wakeuo 之后会跳过 if(nums>0)的代码
             }else {
                 SelectorThread st = nextV3();  //在 main线程种，取到堆里的selectorThread对象
 

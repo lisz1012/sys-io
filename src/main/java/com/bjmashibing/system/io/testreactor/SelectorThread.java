@@ -51,13 +51,14 @@ public class SelectorThread  extends  ThreadLocal<LinkedBlockingQueue<Channel>> 
             try {
                 //1,select()
 //                System.out.println(Thread.currentThread().getName()+"   :  before select...."+ selector.keys().size());
+                // 在 Java 的 NIO 中，Selector.wakeup() 方法可以使得一个正在阻塞的 select() 方法立即返回。如果 wakeup() 方法在 select() 方法调用之前执行，那么下一次的 select() 调用会立即返回。这是因为 wakeup() 方法会设置一个内部标志，这个标志会在 select() 方法调用时被检查。如果这个标志被设置，那么 select() 方法会立即返回，并且这个标志会被清除。所以，即使 wakeup() 在 select() 之前调用，select() 也不会阻塞。
                 int nums = selector.select();  //阻塞  wakeup()
 //                Thread.sleep(1000);  //这绝对不是解决方案，我只是给你演示
 //                System.out.println(Thread.currentThread().getName()+"   :  after select...." + selector.keys().size());
 
                 //2,处理selectkeys
                 if(nums>0){
-                    Set<SelectionKey> keys = selector.selectedKeys();
+                    Set<SelectionKey> keys = selector.selectedKeys(); // keys 是文描
                     Iterator<SelectionKey> iter = keys.iterator();
                     while(iter.hasNext()){  //线程处理的过程
                         SelectionKey key = iter.next();
@@ -79,11 +80,11 @@ public class SelectorThread  extends  ThreadLocal<LinkedBlockingQueue<Channel>> 
                 if(!lbq.isEmpty()){   //队列是个啥东西啊？ 堆里的对象，线程的栈是独立，堆是共享的
                     //只有方法的逻辑，本地变量是线程隔离的
                     Channel c = lbq.take();
-                    if(c instanceof ServerSocketChannel){
+                    if(c instanceof ServerSocketChannel){ // 相当于原来程序中刚开始的那部分, 只有 server 注册了 accept 事件, 这时候还没有任何请求过来
                         ServerSocketChannel server = (ServerSocketChannel) c;
                         server.register(selector,SelectionKey.OP_ACCEPT);
                         System.out.println(Thread.currentThread().getName()+" register listen");
-                    }else if(c instanceof  SocketChannel){
+                    }else if(c instanceof  SocketChannel){  // 这个 SocketChannel 是上面if(key.isAcceptable()){ 这里加进来的
                         SocketChannel client = (SocketChannel) c;
                         ByteBuffer buffer = ByteBuffer.allocateDirect(4096);
                         client.register(selector, SelectionKey.OP_READ, buffer);
